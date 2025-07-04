@@ -1,0 +1,72 @@
+# Ray Cluster Docker Compose Configuration
+version: '3.8'
+
+services:
+  ray-head:
+    image: rayproject/ray:2.8.0-py39
+    container_name: ray-head
+    networks:
+      - ray-cluster
+    ports:
+      - "10000:10000"  # Ray client port
+      - "8265:8265"    # Ray dashboard
+      - "8000:8000"    # Ray Serve port
+    environment:
+      - RAY_HEAD_NODE=true
+    volumes:
+      - ./:/workspace
+      - ./logs:/tmp/ray
+    working_dir: /workspace
+    command: >
+      bash -c "
+        ray start --head 
+        --port=10000 
+        --dashboard-host=0.0.0.0 
+        --dashboard-port=8265 
+        --include-dashboard=true
+        --dashboard-agent-listen-port=52365
+        --object-store-memory=1000000000
+        && tail -f /dev/null
+      "
+    healthcheck:
+      test: ["CMD", "ray", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  ray-worker:
+    image: rayproject/ray:2.8.0-py39
+    networks:
+      - ray-cluster
+    environment:
+      - RAY_HEAD_ADDRESS=ray-head:10000
+    volumes:
+      - ./:/workspace
+      - ./logs:/tmp/ray
+    working_dir: /workspace
+    command: >
+      bash -c "
+        sleep 10 &&
+        ray start 
+        --address=ray-head:10000
+        --object-store-memory=1000000000
+        && tail -f /dev/null
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "ray status --address=ray-head:10000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    depends_on:
+      ray-head:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+networks:
+  ray-cluster:
+    external: true

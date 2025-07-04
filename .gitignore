@@ -1,0 +1,14 @@
+# APPS
+.env
+
+# DATA
+postgres/data/*
+postgres/pgadmin/*
+redis/data/*
+logs/*
+
+# Keep directory structure but ignore contents
+!postgres/data/.gitkeep
+!postgres/pgadmin/.gitkeep
+!redis/data/.gitkeep
+!logs/.gitkeep

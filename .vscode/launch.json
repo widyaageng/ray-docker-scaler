@@ -1,0 +1,58 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Cluster: start",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/infra.py",
+            "console": "integratedTerminal",
+            "args": [
+                "start-ray",
+                "--num-workers", "2"
+            ],
+            "justMyCode": false,
+            "env": {
+                "RUNTIME_ENV": "development"
+            },
+            "consoleTitle": "Ray START"
+        },
+        {
+            "name": "Cluster: stop",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/infra.py",
+            "console": "integratedTerminal",
+            "args": [
+                "stop-ray",
+            ],
+            "justMyCode": false,
+            "env": {
+                "RUNTIME_ENV": "development"
+            },
+            "consoleTitle": "Ray STOP"
+        },
+        {
+            "name": "Start App",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/start_cluster.py",
+            "console": "integratedTerminal",
+            "args": [
+                "start",
+                "--address", "ray://localhost:10000",
+                "--num-workers", "2",
+                "--object-store-memory", "1GB",
+                "--keep-alive"
+            ],
+            "justMyCode": false,
+            "env": {
+                "RUNTIME_ENV": "development"
+            },
+            "consoleTitle": "Full Ray App"
+        }
+    ]
+}

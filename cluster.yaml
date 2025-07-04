@@ -1,0 +1,122 @@
+# Ray Cluster Configuration for `ray up`
+
+# Cluster name
+cluster_name: ray-cluster-services
+
+# Maximum number of workers to launch
+max_workers: 5
+
+# Minimum number of workers to keep running
+min_workers: 0
+
+# Cloud provider configuration
+provider:
+    type: aws
+    region: us-west-2
+    availability_zone: us-west-2a
+    # Uncomment and configure for other providers:
+    # type: gcp
+    # project_id: my-project
+    # region: us-central1
+    # zone: us-central1-a
+
+# Authentication
+auth:
+    ssh_user: ubuntu
+    # ssh_private_key: ~/.ssh/id_rsa
+
+# Node configurations
+available_node_types:
+    ray.head.default:
+        resources: {}
+        node_config:
+            InstanceType: m5.large
+            ImageId: ami-0c02fb55956c7d316  # Ubuntu 20.04 LTS
+            KeyName: my-ray-cluster-key
+            SecurityGroupIds:
+                - sg-0123456789abcdef0
+            SubnetId: subnet-0123456789abcdef0
+            IamInstanceProfile:
+                Name: ray-autoscaler-v1
+        min_workers: 0
+        max_workers: 0
+        
+    ray.worker.default:
+        resources: {}
+        node_config:
+            InstanceType: m5.large
+            ImageId: ami-0c02fb55956c7d316  # Ubuntu 20.04 LTS
+            KeyName: my-ray-cluster-key
+            SecurityGroupIds:
+                - sg-0123456789abcdef0
+            SubnetId: subnet-0123456789abcdef0
+            IamInstanceProfile:
+                Name: ray-autoscaler-v1
+        min_workers: 0
+        max_workers: 5
+
+# Head node configuration
+head_node_type: ray.head.default
+
+# Worker node configuration  
+worker_node_types:
+    - ray.worker.default
+
+# Setup commands to run on all nodes
+setup_commands:
+    # Install system dependencies
+    - sudo apt-get update
+    - sudo apt-get install -y python3-pip python3-dev
+    
+    # Install Ray
+    - pip3 install -U "ray[default]==2.9.0"
+    
+    # Install project dependencies
+    - pip3 install fastapi uvicorn pandas numpy aiohttp python-dotenv pydantic
+
+# Commands to run on head node only
+head_setup_commands:
+    - echo "Setting up head node..."
+
+# Commands to run on worker nodes only
+worker_setup_commands:
+    - echo "Setting up worker node..."
+
+# Commands to start Ray on head node
+head_start_ray_commands:
+    - ray stop
+    - ulimit -n 65536; ray start --head --port=6379 --object-manager-port=8076 --autoscaling-config=~/ray_bootstrap_config.yaml --dashboard-host=0.0.0.0 --dashboard-port=8265
+
+# Commands to start Ray on worker nodes
+worker_start_ray_commands:
+    - ray stop
+    - ulimit -n 65536; ray start --address=$RAY_HEAD_IP:6379 --object-manager-port=8076
+
+# Files to sync to the cluster
+file_mounts: {
+    # Sync the entire project directory
+    "/home/ubuntu/raycluster": ".",
+}
+
+# Custom commands to run after setup
+initialization_commands:
+    - cd /home/ubuntu/raycluster && pip3 install -r requirements.txt
+
+# Runtime environment for Ray Serve (optional)
+# This will be used when deploying applications
+runtime_env:
+    working_dir: "/home/ubuntu/raycluster"
+    pip:
+        - ray[serve]==2.9.0
+        - fastapi==0.104.1
+        - uvicorn==0.24.0
+
+# Autoscaling configuration
+autoscaling:
+    # How often to check for scaling opportunities
+    upscaling_speed: 1.0
+    downscaling_speed: 1.0
+    # Target utilization
+    target_utilization_fraction: 0.8
+    # Idle timeout before scaling down
+    idle_timeout_minutes: 5

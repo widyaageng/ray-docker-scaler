@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ray-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-raycluster}
+      POSTGRES_USER: ${POSTGRES_USER:-rayuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-raypassword}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./postgres/data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+      - ./postgres/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    networks:
+      - ray-cluster
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rayuser} -d ${POSTGRES_DB:-raycluster}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+
+  # Redis is not needed - Ray has its own internal Redis instance
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: ray-redis
+  #   restart: unless-stopped
+  #   environment:
+  #     REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
+  #   ports:
+  #     - "${REDIS_PORT:-6379}:6379"
+  #   volumes:
+  #     - ./redis/data:/data
+  #     - ./redis/config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+  #   networks:
+  #     - ray-cluster
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 5
+  #   command: >
+  #     redis-server /usr/local/etc/redis/redis.conf
+  #     --requirepass ${REDIS_PASSWORD:-redispassword}
+  #     --appendonly yes
+  #     --appendfsync everysec
+  #     --save 900 1
+  #     --save 300 10
+  #     --save 60 10000
+
+  # redis-commander:
+  #   image: rediscommander/redis-commander:latest
+  #   container_name: ray-redis-commander
+  #   restart: unless-stopped
+  #   environment:
+  #     REDIS_HOSTS: local:ray-redis:6379:0:${REDIS_PASSWORD:-redispassword}
+  #     HTTP_USER: ${REDIS_COMMANDER_USER:-admin}
+  #     HTTP_PASSWORD: ${REDIS_COMMANDER_PASSWORD:-admin}
+  #   ports:
+  #     - "${REDIS_COMMANDER_PORT:-8081}:8081"
+  #   networks:
+  #     - ray-cluster
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ray-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@raycluster.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "${PGADMIN_PORT:-8080}:80"
+    volumes:
+      - ./postgres/pgadmin:/var/lib/pgadmin
+      - ./postgres/pgadmin-servers.json:/pgadmin4/servers.json:ro
+    networks:
+      - ray-cluster
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+networks:
+  ray-cluster:
+    driver: bridge
+    name: ray-cluster
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  # redis_data not needed - Ray has its own internal Redis
+  # redis_data:
+  #   driver: local
