@@ -50,21 +50,21 @@ class ServiceConfig:
             self.ray_actor_options = {}
 
 
-# Service-specific configurations
-ALGORUNNER_CONFIG = ServiceConfig(
-    name="algorunner",
-    max_concurrent_queries=int(os.getenv("ALGORUNNER_MAX_QUERIES", "20")),
-    num_replicas=int(os.getenv("ALGORUNNER_REPLICAS", "2")),
-)
+# # Service-specific configurations
+# ALGORUNNER_CONFIG = ServiceConfig(
+#     name="algorunner",
+#     max_concurrent_queries=int(os.getenv("ALGORUNNER_MAX_QUERIES", "20")),
+#     num_replicas=int(os.getenv("ALGORUNNER_REPLICAS", "2")),
+# )
 
-SCREENER_CONFIG = ServiceConfig(
-    name="screener",
-    max_concurrent_queries=int(os.getenv("SCREENER_MAX_QUERIES", "15")),
-    num_replicas=int(os.getenv("SCREENER_REPLICAS", "1")),
-)
+# SCREENER_CONFIG = ServiceConfig(
+#     name="screener",
+#     max_concurrent_queries=int(os.getenv("SCREENER_MAX_QUERIES", "15")),
+#     num_replicas=int(os.getenv("SCREENER_REPLICAS", "1")),
+# )
 
-TICKSCRAWLER_CONFIG = ServiceConfig(
-    name="tickscrawler",
-    max_concurrent_queries=int(os.getenv("TICKSCRAWLER_MAX_QUERIES", "30")),
-    num_replicas=int(os.getenv("TICKSCRAWLER_REPLICAS", "3")),
-)
+# TICKSCRAWLER_CONFIG = ServiceConfig(
+#     name="tickscrawler",
+#     max_concurrent_queries=int(os.getenv("TICKSCRAWLER_MAX_QUERIES", "30")),
+#     num_replicas=int(os.getenv("TICKSCRAWLER_REPLICAS", "3")),
+# )

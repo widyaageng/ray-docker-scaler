@@ -10,16 +10,31 @@ from fastapi import FastAPI
 from typing import Dict, Any
 import logging
 
-from .logic import AlgorunnerLogic
-from .config import ALGORUNNER_SERVICE_CONFIG
-
 logger = logging.getLogger(__name__)
 
 
+# Import the logic and configuration for the algorunner service
+try:
+    from .logic import AlgorunnerLogic
+    from .config import ALGORUNNER_SERVICE_CONFIG
+except ImportError as e:
+    import sys
+    if '/workspace' not in sys.path:
+        sys.path.insert(0, '/workspace')
+        logger.info("Added '/workspace' to sys.path for internal imports")
+    from services.algorunner.logic import AlgorunnerLogic
+    from services.algorunner.config import ALGORUNNER_SERVICE_CONFIG
+
 @serve.deployment(
     name="algorunner",
-    num_replicas=ALGORUNNER_SERVICE_CONFIG.num_replicas,
     max_ongoing_requests=ALGORUNNER_SERVICE_CONFIG.max_ongoing_requests,
+    autoscaling_config={
+        "min_replicas": ALGORUNNER_SERVICE_CONFIG.min_replicas,
+        "max_replicas": ALGORUNNER_SERVICE_CONFIG.max_replicas,
+        "target_ongoing_requests": ALGORUNNER_SERVICE_CONFIG.target_num_ongoing_requests_per_replica,
+        "scale_up_delay_s": ALGORUNNER_SERVICE_CONFIG.scale_up_delay_s,
+        "scale_down_delay_s": ALGORUNNER_SERVICE_CONFIG.scale_down_delay_s
+    },
     ray_actor_options=ALGORUNNER_SERVICE_CONFIG.ray_actor_options
 )
 class AlgorunnerDeployment:

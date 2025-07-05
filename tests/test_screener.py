@@ -2,7 +2,7 @@
 Unit tests for the Screener service.
 """
 
-import pytest
+import pytest # type: ignore
 import asyncio
 from unittest.mock import Mock, patch
 import sys
@@ -230,7 +230,7 @@ class TestScreenerDeployment:
             ]
         }
         
-        result = await self.deployment.screen(request_data)
+        result = await self.deployment.screen(request_data) # type: ignore
         
         assert result["status"] == "success"
         assert "result" in result
@@ -239,7 +239,7 @@ class TestScreenerDeployment:
     @pytest.mark.asyncio
     async def test_get_filters(self):
         """Test getting filters through deployment."""
-        result = await self.deployment.get_filters()
+        result = await self.deployment.get_filters() # type: ignore
         
         assert result["status"] == "success"
         assert "filters" in result
@@ -248,7 +248,7 @@ class TestScreenerDeployment:
     @pytest.mark.asyncio
     async def test_get_status(self):
         """Test getting deployment status."""
-        result = await self.deployment.get_status()
+        result = await self.deployment.get_status() # type: ignore
         
         assert result["status"] == "success"
         assert "data" in result
@@ -262,7 +262,7 @@ class TestScreenerDeployment:
             "description": "A test filter"
         }
         
-        result = await self.deployment.create_custom_filter(filter_data)
+        result = await self.deployment.create_custom_filter(filter_data) # type: ignore
         
         assert result["status"] == "success"
         assert "result" in result
@@ -270,7 +270,7 @@ class TestScreenerDeployment:
     @pytest.mark.asyncio
     async def test_get_market_overview(self):
         """Test getting market overview through deployment."""
-        result = await self.deployment.get_market_overview()
+        result = await self.deployment.get_market_overview() # type: ignore
         
         assert result["status"] == "success"
         assert "overview" in result

@@ -9,15 +9,31 @@ from ray import serve
 from typing import Dict, Any, List
 import logging
 
-from .logic import ScreenerLogic
-from .config import SCREENER_SERVICE_CONFIG
-
 logger = logging.getLogger(__name__)
+
+try:
+    from .logic import ScreenerLogic
+    from .config import SCREENER_SERVICE_CONFIG
+except ImportError as e:
+    import sys
+    if '/workspace' not in sys.path:
+        sys.path.insert(0, '/workspace')
+        logger.info("Added '/workspace' to sys.path for internal imports")
+    from services.screener.logic import ScreenerLogic
+    from services.screener.config import SCREENER_SERVICE_CONFIG
+
 
 
 @serve.deployment(
     name="screener",
-    num_replicas=SCREENER_SERVICE_CONFIG.num_replicas,
+    max_ongoing_requests=SCREENER_SERVICE_CONFIG.max_ongoing_requests,
+    autoscaling_config={
+        "min_replicas": SCREENER_SERVICE_CONFIG.min_replicas,
+        "max_replicas": SCREENER_SERVICE_CONFIG.max_replicas,
+        "target_ongoing_requests": SCREENER_SERVICE_CONFIG.target_num_ongoing_requests_per_replica,
+        "scale_up_delay_s": SCREENER_SERVICE_CONFIG.scale_up_delay_s,
+        "scale_down_delay_s": SCREENER_SERVICE_CONFIG.scale_down_delay_s
+    },
     ray_actor_options=SCREENER_SERVICE_CONFIG.ray_actor_options
 )
 class ScreenerDeployment:

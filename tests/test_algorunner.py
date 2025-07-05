@@ -2,7 +2,7 @@
 Unit tests for the Algorunner service.
 """
 
-import pytest
+import pytest #type: ignore
 import asyncio
 from unittest.mock import Mock, patch
 import sys
@@ -192,7 +192,7 @@ class TestAlgorunnerDeployment:
             "parameters": {"symbol": "AAPL", "period": 14}
         }
         
-        result = await self.deployment.run_algorithm(request_data)
+        result = await self.deployment.run_algorithm(request_data) #type: ignore
         
         assert result["status"] == "success"
         assert "result" in result
@@ -206,7 +206,7 @@ class TestAlgorunnerDeployment:
             "parameters": {"symbol": "AAPL"}
         }
         
-        result = await self.deployment.run_algorithm(request_data)
+        result = await self.deployment.run_algorithm(request_data) #type: ignore
         
         assert result["status"] == "error"
         assert "error" in result
@@ -214,7 +214,7 @@ class TestAlgorunnerDeployment:
     @pytest.mark.asyncio
     async def test_get_status(self):
         """Test getting deployment status."""
-        result = await self.deployment.get_status()
+        result = await self.deployment.get_status() #type: ignore
         
         assert result["status"] == "success"
         assert "data" in result
@@ -223,7 +223,7 @@ class TestAlgorunnerDeployment:
     @pytest.mark.asyncio
     async def test_list_algorithms(self):
         """Test listing available algorithms."""
-        result = await self.deployment.list_algorithms()
+        result = await self.deployment.list_algorithms() #type: ignore
         
         assert result["status"] == "success"
         assert "algorithms" in result
@@ -232,7 +232,7 @@ class TestAlgorunnerDeployment:
     @pytest.mark.asyncio
     async def test_stop_algorithm_error(self):
         """Test stopping non-existent algorithm."""
-        result = await self.deployment.stop_algorithm("non_existent_id")
+        result = await self.deployment.stop_algorithm("non_existent_id") #type: ignore
         
         assert result["status"] == "error"
         assert "error" in result

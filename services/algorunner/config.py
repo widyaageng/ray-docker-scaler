@@ -13,12 +13,19 @@ class AlgorunnerServiceConfig:
     
     name: str = "algorunner"
     num_replicas: int = 2
-    max_ongoing_requests: int = 20
+    max_ongoing_requests: int = 100
     ray_actor_options: Dict[str, Any] = None  # type: ignore
     
     # Algorithm execution settings
     max_execution_time: int = 300  # seconds
     max_concurrent_algorithms: int = 10
+
+    # Autoscaling settings
+    min_replicas: int = 1
+    max_replicas: int = 10
+    target_num_ongoing_requests_per_replica: int = 100
+    scale_up_delay_s: int = 10
+    scale_down_delay_s: int = 60
     
     # Data sources
     data_sources: Dict[str, str] = None  # type: ignore
@@ -40,7 +47,12 @@ class AlgorunnerServiceConfig:
 # Create service configuration instance
 ALGORUNNER_SERVICE_CONFIG = AlgorunnerServiceConfig(
     num_replicas=int(os.getenv("ALGORUNNER_REPLICAS", "1")),  # Reduced from 2 to 1
-    max_ongoing_requests=int(os.getenv("ALGORUNNER_MAX_ONGOING_REQUESTS", "20")),
+    max_ongoing_requests=int(os.getenv("ALGORUNNER_MAX_ONGOING_REQUESTS", "100")),
     max_execution_time=int(os.getenv("ALGORUNNER_MAX_EXECUTION_TIME", "300")),
-    max_concurrent_algorithms=int(os.getenv("ALGORUNNER_MAX_CONCURRENT", "10"))
+    max_concurrent_algorithms=int(os.getenv("ALGORUNNER_MAX_CONCURRENT", "10")),
+    min_replicas=int(os.getenv("ALGORUNNER_MIN_REPLICAS", "1")),
+    max_replicas=int(os.getenv("ALGORUNNER_MAX_REPLICAS", "10")),
+    target_num_ongoing_requests_per_replica=int(os.getenv("ALGORUNNER_TARGET_NUM_ONGOING_REQUESTS", "100")),
+    scale_up_delay_s=int(os.getenv("ALGORUNNER_SCALE_UP_DELAY", "10")),
+    scale_down_delay_s=int(os.getenv("ALGORUNNER_SCALE_DOWN_DELAY", "60"))
 )

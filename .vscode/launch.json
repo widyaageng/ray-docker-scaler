@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Cluster: start",
+            "name": "Infra: start",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/scripts/infra.py",
@@ -18,10 +18,10 @@
             "env": {
                 "RUNTIME_ENV": "development"
             },
-            "consoleTitle": "Ray START"
+            "consoleTitle": "Infra START"
         },
         {
-            "name": "Cluster: stop",
+            "name": "Infra: stop",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/scripts/infra.py",
@@ -33,26 +33,75 @@
             "env": {
                 "RUNTIME_ENV": "development"
             },
-            "consoleTitle": "Ray STOP"
+            "consoleTitle": "Infra STOP"
         },
         {
-            "name": "Start App",
+            "name": "Ray Cluster Serve App: start",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/scripts/start_cluster.py",
             "console": "integratedTerminal",
             "args": [
                 "start",
-                "--address", "ray://localhost:10000",
+                "--address", "ray-head:10000",
                 "--num-workers", "2",
-                "--object-store-memory", "1GB",
-                "--keep-alive"
+                "--num-gpus", "0",
+                "--num-cpus", "0.75",
+                "--object-store-memory", "1000000000",
+                "--with-services"
             ],
             "justMyCode": false,
             "env": {
                 "RUNTIME_ENV": "development"
             },
-            "consoleTitle": "Full Ray App"
-        }
+            "consoleTitle": "Ray START"
+        },
+        {
+            "name": "Ray Cluster Serve App: stop",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/start_cluster.py",
+            "console": "integratedTerminal",
+            "args": [
+                "stop"
+            ],
+            "justMyCode": false,
+            "env": {
+                "RUNTIME_ENV": "development"
+            },
+            "consoleTitle": "Ray STOP"
+        },
+        {
+            "name": "Ray Cluster Deploy App: deploy",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/start_cluster.py",
+            "console": "integratedTerminal",
+            "args": [
+                "serve-deploy-start",
+                "--address", "0.0.0.0:10000"
+            ],
+            "justMyCode": false,
+            "env": {
+                "RUNTIME_ENV": "development"
+            },
+            "consoleTitle": "Ray Serve Deploy START"
+        },
+        {
+            "name": "Ray Cluster Deploy App: shutdown",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/start_cluster.py",
+            "console": "integratedTerminal",
+            "args": [
+                "serve-deploy-shutdown",
+                "--address", "0.0.0.0:10000"
+            ],
+            "justMyCode": false,
+            "env": {
+                "RUNTIME_ENV": "development"
+            },
+            "consoleTitle": "Ray Serve Deploy SHUTDOWN"
+        },
     ]
 }

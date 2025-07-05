@@ -13,8 +13,15 @@ class ScreenerServiceConfig:
     
     name: str = "screener"
     num_replicas: int = 1
-    max_concurrent_queries: int = 15
     ray_actor_options: Dict[str, Any] = None  # type: ignore
+    max_ongoing_requests: int = 100  # Maximum concurrent queries allowed
+
+    # Autoscaling settings
+    min_replicas: int = 1
+    max_replicas: int = 10
+    target_num_ongoing_requests_per_replica: int = 100
+    scale_up_delay_s: int = 10
+    scale_down_delay_s: int = 60
     
     # Data source settings
     data_refresh_interval: int = 60  # seconds
@@ -47,7 +54,12 @@ class ScreenerServiceConfig:
 # Create service configuration instance
 SCREENER_SERVICE_CONFIG = ScreenerServiceConfig(
     num_replicas=int(os.getenv("SCREENER_REPLICAS", "1")),
-    max_concurrent_queries=int(os.getenv("SCREENER_MAX_QUERIES", "15")),
+    max_ongoing_requests=int(os.getenv("SCREENER_MAX_ONGOING_REQUESTS", "100")),
     data_refresh_interval=int(os.getenv("SCREENER_REFRESH_INTERVAL", "60")),
-    max_results_per_query=int(os.getenv("SCREENER_MAX_RESULTS", "1000"))
+    max_results_per_query=int(os.getenv("SCREENER_MAX_RESULTS", "1000")),
+    min_replicas=int(os.getenv("SCREENER_MIN_REPLICAS", "1")),
+    max_replicas=int(os.getenv("SCREENER_MAX_REPLICAS", "10")),
+    target_num_ongoing_requests_per_replica=int(os.getenv("SCREENER_TARGET_NUM_ONGOING_REQUESTS", "100")),
+    scale_up_delay_s=int(os.getenv("SCREENER_SCALE_UP_DELAY", "10")),
+    scale_down_delay_s=int(os.getenv("SCREENER_SCALE_DOWN_DELAY", "60"))
 )

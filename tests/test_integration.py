@@ -2,7 +2,7 @@
 Integration tests for the Ray cluster services.
 """
 
-import pytest
+import pytest # type: ignore
 import asyncio
 import sys
 import os

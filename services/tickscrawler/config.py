@@ -13,13 +13,20 @@ class TickscrawlerServiceConfig:
     
     name: str = "tickscrawler"
     num_replicas: int = 2
-    max_concurrent_queries: int = 30
+    max_ongoing_requests: int = 100
     ray_actor_options: Dict[str, Any] = None  # type: ignore
     
     # Crawling settings
     max_concurrent_crawls: int = 10
     default_crawl_limit: int = 1000
     crawl_timeout: int = 300  # seconds
+
+    # Autoscaling settings
+    min_replicas: int = 1
+    max_replicas: int = 10
+    target_num_ongoing_requests_per_replica: int = 100
+    scale_up_delay_s: int = 10
+    scale_down_delay_s: int = 60
     
     # Streaming settings
     max_active_streams: int = 20
@@ -62,10 +69,15 @@ class TickscrawlerServiceConfig:
 # Create service configuration instance
 TICKSCRAWLER_SERVICE_CONFIG = TickscrawlerServiceConfig(
     num_replicas=int(os.getenv("TICKSCRAWLER_REPLICAS", "1")),  # Reduced from 3 to 1
-    max_concurrent_queries=int(os.getenv("TICKSCRAWLER_MAX_QUERIES", "30")),
+    max_ongoing_requests=int(os.getenv("TICKSCRAWLER_MAX_ONGOING_REQUESTS", "100")),
     max_concurrent_crawls=int(os.getenv("TICKSCRAWLER_MAX_CRAWLS", "10")),
     default_crawl_limit=int(os.getenv("TICKSCRAWLER_DEFAULT_LIMIT", "1000")),
     crawl_timeout=int(os.getenv("TICKSCRAWLER_TIMEOUT", "300")),
     max_active_streams=int(os.getenv("TICKSCRAWLER_MAX_STREAMS", "20")),
-    requests_per_minute=int(os.getenv("TICKSCRAWLER_RATE_LIMIT", "100"))
+    requests_per_minute=int(os.getenv("TICKSCRAWLER_RATE_LIMIT", "100")),
+    min_replicas=int(os.getenv("TICKSCRAWLER_MIN_REPLICAS", "1")),
+    max_replicas=int(os.getenv("TICKSCRAWLER_MAX_REPLICAS", "10")),
+    target_num_ongoing_requests_per_replica=int(os.getenv("TICKSCRAWLER_TARGET_NUM_ONGOING_REQUESTS", "100")),
+    scale_up_delay_s=int(os.getenv("TICKSCRAWLER_SCALE_UP_DELAY", "10")),
+    scale_down_delay_s=int(os.getenv("TICKSCRAWLER_SCALE_DOWN_DELAY", "60"))
 )

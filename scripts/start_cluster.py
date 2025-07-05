@@ -11,7 +11,7 @@ import sys
 import time
 import logging
 import subprocess
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional,Literal
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -142,76 +142,96 @@ def get_cluster_status() -> Dict[str, Any]:
         return {"status": "error", "error": str(e)}
 
 
-def deploy_serve_app(address: str = "ray://localhost:10000") -> bool:
+def action_serve_app(
+        action: Literal["deploy", "shutdown"] = "deploy",
+        address: str = "auto",
+        serve_host: str = "0.0.0.0",
+        serve_port: int = 8000,
+) -> bool:
     """
     Deploy the Ray Serve application to the running cluster.
     
     Args:
-        address: Ray cluster address
-        
+        address: Ray cluster address (default is 'auto')
+        action: Action to perform ('deploy' or 'shutdown')
+        serve_host: Host for Ray Serve (default is '0.0.0.0')
+        serve_port: Port for Ray Serve (default is 8000)
+
     Returns:
         True if successful, False otherwise
     """
     try:
-        logger.info("Deploying Ray Serve application to cluster...")
+        logger.info(f"Actioning {action} on Ray Serve application to cluster...")
         
-        # Import Ray and connect to cluster
-        import ray
-        from ray import serve
+        # Execute deployment inside the head node container
+        result = subprocess.run([
+            "docker", "exec", "ray-head",
+            "python", "/workspace/serve_app/serve_app.py", action,
+            "--address", address,
+            "--serve-host", serve_host,
+            "--serve-port", str(serve_port)
+        ], capture_output=True, text=True, check=False)
         
-        # Connect to the Ray cluster
-        logger.info(f"Connecting to Ray cluster at {address}")
-        ray.init(address=address, ignore_reinit_error=True)
-        
-        # Import and deploy services
-        from serve_app.serve_app import deploy_services
-        
-        deployments = deploy_services()
-        
-        logger.info("Ray Serve application deployed successfully")
-        logger.info("Service endpoints:")
-        logger.info("   • Main API: http://localhost:8000")
-        logger.info("   • Health check: http://localhost:8000/health")
-        logger.info("   • Algorunner: http://localhost:8000/api/algorunner/")
-        logger.info("   • Screener: http://localhost:8000/api/screener/")
-        logger.info("   • Tickscrawler: http://localhost:8000/api/tickscrawler/")
-        
-        return True
+        if result.returncode == 0:
+            logger.info(f"Ray Serve application action:{action} successfully")
+            if action == "deploy":
+                logger.info("Service endpoints:")
+                logger.info(f"   • Main API: http://localhost:{serve_port}/")
+                logger.info(f"   • Health check: http://localhost:{serve_port}/health")
+                logger.info(f"   • Algorunner: http://localhost:{serve_port}/api/algorunner/")
+                logger.info(f"   • Screener: http://localhost:{serve_port}/api/screener/")
+                logger.info(f"   • Tickscrawler: http://localhost:{serve_port}/api/tickscrawler/")
+            return True
+        else:
+            logger.error(f"Failed to {action} Ray Serve application")
+            logger.error(f"Return code: {result.returncode}")
+            if result.stdout:
+                logger.error(f"STDOUT: {result.stdout}")
+            if result.stderr:
+                logger.error(f"STDERR: {result.stderr}")
+            return False
         
     except Exception as e:
-        logger.error(f"Failed to deploy Ray Serve application: {e}")
+        logger.error(f"Failed to {action} Ray Serve application: {e}")
         return False
 
 
 def connect_to_ray_cluster(address: str = "ray://localhost:10000") -> bool:
     """
-    Connect to the Ray cluster for client operations.
+    Test Ray cluster connectivity (executed inside container).
 
     Args:
-        address: Ray cluster address
+        address: Ray cluster address (not used, test runs inside container)
 
     Returns:
         True if successful, False otherwise
     """
     try:
-        import ray
+        logger.info("Testing Ray cluster connectivity...")
+        
+        # Test Ray status from inside the container
+        result = subprocess.run([
+            "docker", "exec", "ray-head",
+            "ray", "status"
+        ], capture_output=True, text=True, check=False)
+        
+        if result.returncode == 0:
+            logger.info("Ray cluster is accessible and running")
+            if result.stdout:
+                # Show a summary instead of full output
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    if 'Active:' in line or 'CPU' in line or 'memory' in line:
+                        logger.info(f"  {line.strip()}")
+            return True
+        else:
+            logger.error("Failed to access Ray cluster")
+            if result.stderr:
+                logger.error(f"Error: {result.stderr}")
+            return False
 
-        if ray.is_initialized():
-            ray.shutdown()
-
-        logger.info(f"Connecting to Ray cluster at: {address}")
-        ray.init(address=address)
-
-        logger.info("Successfully connected to Ray cluster")
-        logger.info(f"Available resources: {ray.available_resources()}")
-
-        return True
-
-    except ImportError:
-        logger.error("Ray not installed. Please run: pip install -r requirements.txt")
-        return False
     except Exception as e:
-        logger.error(f"Failed to connect to Ray cluster: {e}")
+        logger.error(f"Failed to test Ray cluster connectivity: {e}")
         return False
 
 
@@ -264,20 +284,30 @@ def main():
     )
     parser.add_argument(
         "mode",
-        choices=["start", "stop", "restart", "status", "connect", "info", "deploy"],
+        choices=[
+            "start",
+            "stop",
+            "restart",
+            "status",
+            "connect",
+            "info",
+            "serve-deploy-start",
+            "serve-deploy-shutdown",
+        ],
+
         help="Cluster operation mode",
     )
     parser.add_argument(
         "--address",
         type=str,
-        default="ray://localhost:10000",
-        help="Ray cluster address for connect/deploy mode (default: ray://localhost:10000)",
+        default="0.0.0.0:10000",
+        help="Ray cluster address for connect/deploy mode (default: 0.0.0.0:10000)",
     )
     parser.add_argument(
         "--num-workers", type=int, default=2, help="Number of worker nodes (default: 2)"
     )
-    parser.add_argument("--num-cpus", type=int, help="Number of CPUs per node")
-    parser.add_argument("--num-gpus", type=int, help="Number of GPUs per node")
+    parser.add_argument("--num-cpus", type=float, help="Number of CPUs per node")
+    parser.add_argument("--num-gpus", type=float, help="Number of GPUs per node")
     parser.add_argument(
         "--object-store-memory",
         type=str,
@@ -299,7 +329,7 @@ def main():
 
     # Validate memory format
     try:
-        object_store_memory = parse_memory_string(args.object_store_memory)
+        _ = parse_memory_string(args.object_store_memory)
     except ValueError as e:
         logger.error(f"Invalid memory format: {e}")
         sys.exit(1)
@@ -317,8 +347,13 @@ def main():
             # Deploy services if requested
             if args.with_services:
                 logger.info("Deploying Ray Serve services...")
-                time.sleep(5)  # Wait for cluster to stabilize
-                if not deploy_serve_app(args.address):
+                time.sleep(10)  # Wait for cluster to stabilize
+                if not action_serve_app(
+                    action="deploy",
+                    address=args.address,
+                    serve_host="0.0.0.0",
+                    serve_port=8000,
+                ):
                     logger.error("Service deployment failed, but cluster is running")
 
             if args.keep_alive:
@@ -354,8 +389,13 @@ def main():
             # Deploy services if requested
             if args.with_services:
                 logger.info("Deploying Ray Serve services...")
-                time.sleep(5)  # Wait for cluster to stabilize
-                if not deploy_serve_app(args.address):
+                time.sleep(10)  # Wait for cluster to stabilize
+                if not action_serve_app(
+                    action="deploy",
+                    address=args.address,
+                    serve_host="0.0.0.0",
+                    serve_port=8000,
+                ):
                     logger.error("Service deployment failed, but cluster is running")
         else:
             sys.exit(1)
@@ -389,9 +429,23 @@ def main():
     elif args.mode == "info":
         show_cluster_info()
 
-    elif args.mode == "deploy":
+    elif args.mode == "serve-deploy-start":
         logger.info("Deploying Ray Serve services to existing cluster...")
-        if not deploy_serve_app(args.address):
+        if not action_serve_app(
+            "deploy",
+            address=args.address,
+            serve_host="0.0.0.0",
+            serve_port=8000,
+        ):
+            sys.exit(1)
+    elif args.mode == "serve-deploy-shutdown":
+        logger.info("Shutting down Ray Serve services...")
+        if not action_serve_app(
+            "shutdown",
+            address=args.address,
+            serve_host="0.0.0.0",
+            serve_port=8000,
+        ):
             sys.exit(1)
 
 

@@ -9,15 +9,30 @@ from ray import serve
 from typing import Dict, Any, List
 import logging
 
-from .logic import TickscrawlerLogic
-from .config import TICKSCRAWLER_SERVICE_CONFIG
-
 logger = logging.getLogger(__name__)
+
+try:
+    from .logic import TickscrawlerLogic
+    from .config import TICKSCRAWLER_SERVICE_CONFIG
+except ImportError as e:
+    import sys
+    if '/workspace' not in sys.path:
+        sys.path.insert(0, '/workspace')
+        logger.info("Added '/workspace' to sys.path for internal imports")
+    from services.tickscrawler.logic import TickscrawlerLogic
+    from services.tickscrawler.config import TICKSCRAWLER_SERVICE_CONFIG
 
 
 @serve.deployment(
     name="tickscrawler",
-    num_replicas=TICKSCRAWLER_SERVICE_CONFIG.num_replicas,
+    max_ongoing_requests=TICKSCRAWLER_SERVICE_CONFIG.max_ongoing_requests,
+    autoscaling_config={
+        "min_replicas": TICKSCRAWLER_SERVICE_CONFIG.min_replicas,
+        "max_replicas": TICKSCRAWLER_SERVICE_CONFIG.max_replicas,
+        "target_ongoing_requests": TICKSCRAWLER_SERVICE_CONFIG.target_num_ongoing_requests_per_replica,
+        "scale_up_delay_s": TICKSCRAWLER_SERVICE_CONFIG.scale_up_delay_s,
+        "scale_down_delay_s": TICKSCRAWLER_SERVICE_CONFIG.scale_down_delay_s
+    },
     ray_actor_options=TICKSCRAWLER_SERVICE_CONFIG.ray_actor_options
 )
 class TickscrawlerDeployment:

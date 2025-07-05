@@ -7,10 +7,8 @@ that routes requests to appropriate microservices.
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-import ray
 from ray import serve
 from ray.serve.handle import DeploymentHandle
-from typing import Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,7 +23,14 @@ app = FastAPI(
 
 @serve.deployment(
     name="main-router",
-    num_replicas=1,
+    max_ongoing_requests=100,
+    autoscaling_config={
+        "min_replicas": 1,
+        "max_replicas": 10,
+        "target_ongoing_requests": 100,
+        "scale_up_delay_s": 10,
+        "scale_down_delay_s": 60
+    },
     ray_actor_options={"num_cpus": 0.3, "memory": 64 * 1024 * 1024}
 )
 @serve.ingress(app)
@@ -84,6 +89,17 @@ class MainRouterDeployment:
         except Exception as e:
             logger.error(f"Algorunner status error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
+        
+    
+    @app.get("/api/screener/status")
+    async def get_screener_status(self):
+        """Get screener service status."""
+        try:
+            result = await self.screener_handle.get_status.remote() # type: ignore
+            return result
+        except Exception as e:
+            logger.error(f"Screener status error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
     
     # Screener service routes
     @app.post("/api/screener/screen")
@@ -105,6 +121,16 @@ class MainRouterDeployment:
             return result
         except Exception as e:
             logger.error(f"Screener filters error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+        
+    @app.get("/api/tickscrawler/status")
+    async def get_tickscrawler_status(self):
+        """Get tickscrawler service status."""
+        try:
+            result = await self.tickscrawler_handle.get_status.remote() # type: ignore
+            return result
+        except Exception as e:
+            logger.error(f"Tickscrawler status error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
     # Tickscrawler service routes
