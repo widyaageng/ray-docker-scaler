@@ -1,6 +1,6 @@
 # Ray Cluster Watcher Usage Guide
 
-This guide demonstrates how to use the Ray watcher service for automatic scaling.
+This guide demonstrates how to use the Ray watcher service for automatic scaling and provides a comprehensive overview of the watcher implementation.
 
 ## Quick Start
 
@@ -139,3 +139,104 @@ The watcher can be extended with custom scaling logic by modifying the `scale_up
 5. **Test thoroughly**: Verify autoscaling behavior with your workload
 6. **Monitor logs**: Keep an eye on watcher and worker logs
 7. **Plan for failures**: Have fallback strategies for scaling issues
+
+## Architecture and Implementation
+
+### Watcher Architecture
+
+The Ray watcher implementation follows a clean, modular architecture:
+
+**File: `scripts/ray_watcher.py`**
+- Standalone Python script for the Ray watcher service
+- Configured to read settings from environment variables
+- Handles Ray cluster monitoring and worker provisioning
+- Includes proper error handling and logging
+
+**File: `scripts/infra.py`**
+- Modified `start_ray_watcher()` function to use the separate watcher script
+- Updated container mount to use `/workspace/scripts/ray_watcher.py` directly
+- Removed the embedded string containing the watcher script
+- Added Docker CLI installation in the watcher container
+
+### Key Improvements
+
+**Cleaner Architecture:**
+- Watcher logic is now in a separate, maintainable file
+- Environment variables are used for configuration
+- No more embedded multi-line strings in the main script
+
+**Better Container Setup:**
+- Uses workspace mount (`/workspace`) instead of separate app directory
+- Installs Docker CLI in the watcher container for worker management
+- Proper environment variable passing
+
+**Configuration:**
+- `WATCHER_CHECK_INTERVAL`: Check frequency (default: 120 seconds)
+- `WATCHER_PENDING_THRESHOLD`: Tasks threshold (default: 5)
+- `WATCHER_MAX_WORKERS`: Maximum workers (default: 10)
+- `WATCHER_COOLDOWN`: Scale-up cooldown (default: 300 seconds)
+- `RAY_IMAGE_VERSION`: Ray Docker image version
+
+### Container Command
+
+The watcher now runs with this simplified command:
+```bash
+docker run -d \
+    --name ray-watcher \
+    --network ray-cluster \
+    --init \
+    -v $(pwd):/workspace \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -w /workspace \
+    -e WATCHER_CHECK_INTERVAL=120 \
+    -e WATCHER_PENDING_THRESHOLD=5 \
+    -e WATCHER_MAX_WORKERS=10 \
+    -e WATCHER_COOLDOWN=300 \
+    -e RAY_IMAGE_VERSION=rayproject/ray:2.47.1.aeaf41-py39-cpu \
+    -e RAY_DISABLE_IMPORT_WARNING=1 \
+    rayproject/ray:2.47.1.aeaf41-py39-cpu \
+    bash -c 'apt-get update && apt-get install -y docker.io && python /workspace/scripts/ray_watcher.py'
+```
+
+### Benefits
+
+1. **Maintainability**: Watcher logic is in a separate file for easier editing
+2. **Debugging**: Can run the watcher script directly for testing
+3. **Configuration**: Clean environment variable-based configuration
+4. **Deployment**: Simpler container setup using workspace mount
+5. **Version Control**: Better diff tracking with separate files
+
+## Testing
+
+### Test Files
+
+**Updated Test Files:**
+- `tests/test_watcher.py`: Integration tests for the watcher service
+- `tests/test_watcher_logic.py`: Unit tests for watcher logic functions
+- `tests/test_watcher_suite.py`: Comprehensive test runner
+
+**Test Coverage:**
+- Watcher script existence and syntax validation
+- Individual function testing (worker indexing, metrics parsing)
+- Environment variable configuration testing
+- Command-line interface validation
+- Integration testing with live Ray cluster (when available)
+- Container management testing
+
+**Running Tests:**
+```bash
+# Run individual tests
+python tests/test_watcher_logic.py
+python tests/test_watcher.py
+
+# Run comprehensive test suite
+python tests/test_watcher_suite.py
+```
+
+### Test Categories
+
+1. **Unit Tests**: Test individual functions and logic
+2. **Integration Tests**: Test interaction with Ray cluster
+3. **Configuration Tests**: Test environment variable handling
+4. **Syntax Tests**: Validate Python syntax of watcher script
+5. **CLI Tests**: Test command-line interface functionality
