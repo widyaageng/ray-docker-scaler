@@ -403,222 +403,32 @@ def start_ray_watcher(
         if not ensure_ray_network():
             return False
         
-        # Create a Python script for the watcher
-        watcher_script = f"""
-import time
-import subprocess
-import json
-import logging
-import os
-import re
-from datetime import datetime, timedelta
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('ray-watcher')
-
-last_scale_up = None
-check_interval = {check_interval}
-pending_task_threshold = {pending_task_threshold}
-max_workers = {max_workers}
-scale_up_cooldown = {scale_up_cooldown}
-
-def run_command(command, check=False):
-    try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True)
-        if check and result.returncode != 0:
-            logger.error(f"Command failed: {{command}}")
-            logger.error(f"STDERR: {{result.stderr}}")
-            return None
-        return result
-    except Exception as e:
-        logger.error(f"Error running command: {{e}}")
-        return None
-
-def get_cluster_metrics():
-    try:
-        # Get Ray status from head node
-        result = run_command("docker exec ray-head ray status --address=auto", check=False)
-        if not result or result.returncode != 0:
-            logger.warning("Could not get Ray status from head node")
-            return None
+        # Get the path to the watcher script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        watcher_script_path = os.path.join(script_dir, "ray_watcher.py")
         
-        status_output = result.stdout
-        metrics = {{
-            "pending_tasks": 0,
-            "running_tasks": 0,
-            "workers": 0
-        }}
-        
-        # Parse status output for task information
-        lines = status_output.split('\\n')
-        for line in lines:
-            line = line.strip()
-            # Look for task information in various formats
-            if "pending" in line.lower() and "task" in line.lower():
-                try:
-                    match = re.search(r'(\\d+)\\s+pending', line, re.IGNORECASE)
-                    if match:
-                        metrics["pending_tasks"] = int(match.group(1))
-                except:
-                    pass
-            elif "running" in line.lower() and "task" in line.lower():
-                try:
-                    match = re.search(r'(\\d+)\\s+running', line, re.IGNORECASE)
-                    if match:
-                        metrics["running_tasks"] = int(match.group(1))
-                except:
-                    pass
-        
-        # Get current worker count from Docker
-        result = run_command("docker ps --filter name=ray-worker --format '{{{{.Names}}}}'", check=False)
-        if result and result.stdout.strip():
-            workers = [w.strip() for w in result.stdout.strip().split('\\n') if w.strip() and w.startswith('ray-worker')]
-            metrics["workers"] = len(workers)
-        else:
-            metrics["workers"] = 0
-        
-        return metrics
-    except Exception as e:
-        logger.error(f"Error getting cluster metrics: {{e}}")
-        return None
-
-def should_scale_up(metrics):
-    global last_scale_up
-    
-    if not metrics:
-        return False
-    
-    # Check if we have pending tasks above threshold
-    if metrics["pending_tasks"] < pending_task_threshold:
-        return False
-    
-    # Check if we're already at max workers
-    if metrics["workers"] >= max_workers:
-        logger.info(f"Already at maximum workers ({{max_workers}})")
-        return False
-    
-    # Check cooldown period
-    if last_scale_up:
-        time_since_last_scale = datetime.now() - last_scale_up
-        if time_since_last_scale.total_seconds() < scale_up_cooldown:
-            remaining = scale_up_cooldown - time_since_last_scale.total_seconds()
-            logger.info(f"Scale-up cooldown: {{remaining:.0f}} seconds remaining")
+        # Check if watcher script exists
+        if not os.path.exists(watcher_script_path):
+            logger.error(f"Watcher script not found at {watcher_script_path}")
             return False
-    
-    return True
-
-def scale_up_worker():
-    try:
-        logger.info("Scaling up: Adding new Ray worker")
         
-        # Get next worker index
-        result = run_command("docker ps --filter name=ray-worker --format '{{{{.Names}}}}'", check=False)
-        worker_index = 1
-        if result and result.stdout.strip():
-            worker_names = [w.strip() for w in result.stdout.strip().split('\\n') if w.strip() and w.startswith('ray-worker-')]
-            if worker_names:
-                indices = []
-                for name in worker_names:
-                    try:
-                        idx = int(name.split('-')[-1])
-                        indices.append(idx)
-                    except ValueError:
-                        continue
-                worker_index = max(indices) + 1 if indices else 1
-        
-        worker_name = f"ray-worker-{{worker_index}}"
-        logger.info(f"Starting worker: {{worker_name}}")
-        
-        # Start new worker container
-        command = f\"\"\"
-        docker run -d \\
-            --name {{worker_name}} \\
-            --network ray-cluster \\
-            --shm-size=2gb \\
-            --init \\
-            -v /workspace:/workspace \\
-            -v /workspace/logs:/tmp/ray \\
-            -w /workspace \\
-            -e RAY_HEAD_ADDRESS=ray-head:10000 \\
-            -e RAY_DISABLE_IMPORT_WARNING=1 \\
-            rayproject/ray:2.9.0-py310 \\
-            bash -c 'sleep 5 && RAY_DISABLE_IMPORT_WARNING=1 ray start --address=ray-head:10000 --object-store-memory=1000000000 --num-cpus=1 --disable-usage-stats && sleep infinity'
-        \"\"\"
-        
-        result = run_command(command.replace('\\n', ' ').strip(), check=False)
-        if result and result.returncode == 0:
-            logger.info(f"Successfully started {{worker_name}}")
-            time.sleep(10)  # Wait for worker to connect
-            return True
-        else:
-            logger.error(f"Failed to start {{worker_name}}")
-            if result:
-                logger.error(f"Error output: {{result.stderr}}")
-            return False
-    except Exception as e:
-        logger.error(f"Error scaling up worker: {{e}}")
-        return False
-
-def main():
-    global last_scale_up
-    
-    logger.info("Ray Watcher started")
-    logger.info(f"Check interval: {{check_interval}} seconds")
-    logger.info(f"Pending task threshold: {{pending_task_threshold}}")
-    logger.info(f"Max workers: {{max_workers}}")
-    logger.info(f"Scale-up cooldown: {{scale_up_cooldown}} seconds")
-    
-    while True:
-        try:
-            # Get cluster metrics
-            metrics = get_cluster_metrics()
-            if metrics:
-                logger.info(f"Cluster metrics - Pending: {{metrics['pending_tasks']}}, "
-                          f"Running: {{metrics['running_tasks']}}, Workers: {{metrics['workers']}}")
-                
-                # Check if we should scale up
-                if should_scale_up(metrics):
-                    if scale_up_worker():
-                        last_scale_up = datetime.now()
-                        logger.info(f"Scaled up at {{last_scale_up}}")
-                    else:
-                        logger.error("Scale-up failed")
-            else:
-                logger.warning("Could not get cluster metrics")
-            
-            # Wait for next check
-            time.sleep(check_interval)
-            
-        except KeyboardInterrupt:
-            logger.info("Ray Watcher stopped")
-            break
-        except Exception as e:
-            logger.error(f"Error in watcher main loop: {{e}}")
-            time.sleep(check_interval)
-
-if __name__ == "__main__":
-    main()
-"""
-        
-        # Write the watcher script to a temporary file
-        watcher_script_path = "/tmp/ray_watcher.py"
-        with open(watcher_script_path, "w") as f:
-            f.write(watcher_script)
-        
-        # Start watcher container
+        # Start watcher container with environment variables for configuration
         command = f"""
         docker run -d \\
             --name ray-watcher \\
             --network ray-cluster \\
             --init \\
             -v $(pwd):/workspace \\
-            -v {watcher_script_path}:/app/ray_watcher.py \\
             -v /var/run/docker.sock:/var/run/docker.sock \\
             -w /workspace \\
+            -e WATCHER_CHECK_INTERVAL={check_interval} \\
+            -e WATCHER_PENDING_THRESHOLD={pending_task_threshold} \\
+            -e WATCHER_MAX_WORKERS={max_workers} \\
+            -e WATCHER_COOLDOWN={scale_up_cooldown} \\
+            -e RAY_IMAGE_VERSION={RAY_IMAGE_VERSION} \\
             -e RAY_DISABLE_IMPORT_WARNING=1 \\
             {RAY_IMAGE_VERSION} \\
-            bash -c 'apt-get update && apt-get install -y docker.io && python /app/ray_watcher.py'
+            bash -c 'apt-get update && apt-get install -y docker.io && python /workspace/scripts/ray_watcher.py'
         """
         
         run_command(command.replace("\n", " ").replace("\\", ""))
@@ -627,6 +437,7 @@ if __name__ == "__main__":
         logger.info(f"Monitoring interval: {check_interval} seconds")
         logger.info(f"Pending task threshold: {pending_task_threshold}")
         logger.info(f"Maximum workers: {max_workers}")
+        logger.info(f"Scale-up cooldown: {scale_up_cooldown} seconds")
         return True
     
     except Exception as e:
