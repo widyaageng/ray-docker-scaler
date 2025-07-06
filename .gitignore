@@ -12,3 +12,6 @@ logs/*
 !postgres/pgadmin/.gitkeep
 !redis/data/.gitkeep
 !logs/.gitkeep
+
+# python
+__pycache__/

@@ -256,10 +256,7 @@ Services are deployed inside the Ray head container using `docker exec`:
 
 ```bash
 # Deploy all services
-docker exec ray-head python /workspace/serve_app/serve_app.py
-
-# Or use the deployment script
-docker exec ray-head python /workspace/deploy_inside_cluster.py
+docker exec ray-head python /workspace/serve_app/serve_app.py deploy --address localhost:10000
 ```
 
 #### Service Configuration
