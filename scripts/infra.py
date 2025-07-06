@@ -359,15 +359,30 @@ def start_additional_ray_worker(
             --network ray-cluster \\
             --shm-size=2gb \\
             --init \\
-            -v $(pwd):/workspace \\
-            -v $(pwd)/logs:/tmp/ray \\
+            -v $(pwd)/..:/workspace \\
+            -v $(pwd)/../logs:/tmp/ray \\
             -w /workspace \\
             {env_vars_str} \\
             -e RAY_HEAD_ADDRESS=ray-head:10000 \\
             -e RAY_DISABLE_IMPORT_WARNING=1 \\
             {RAY_IMAGE_VERSION} \\
-            bash -c 'sleep 5 && RAY_DISABLE_IMPORT_WARNING=1 ray start --address=ray-head:10000 --object-store-memory={object_store_bytes} --num-cpus=1 --disable-usage-stats && sleep infinity'
+            bash -c 'sleep 10 && RAY_DISABLE_IMPORT_WARNING=1 ray start --address=ray-head:10000 --object-store-memory={object_store_bytes} --num-cpus=1 --disable-usage-stats && sleep infinity'
         """
+        # command = f"""
+        # docker run -d \\
+        #     --name {worker_name} \\
+        #     --network ray-cluster \\
+        #     --shm-size=2gb \\
+        #     --init \\
+        #     -v $(pwd):/workspace \\
+        #     -v $(pwd)/logs:/tmp/ray \\
+        #     -w /workspace \\
+        #     {env_vars_str} \\
+        #     -e RAY_HEAD_ADDRESS=ray-head:10000 \\
+        #     -e RAY_DISABLE_IMPORT_WARNING=1 \\
+        #     {RAY_IMAGE_VERSION} \\
+        #     bash -c 'sleep 5 && RAY_DISABLE_IMPORT_WARNING=1 ray start --address=ray-head:10000 --object-store-memory={object_store_bytes} --num-cpus=1 --disable-usage-stats && sleep infinity'
+        # """
         
         run_command(command.replace("\n", " ").replace("\\", ""))
         
@@ -391,7 +406,7 @@ def start_additional_ray_worker(
 
 def start_ray_watcher(
     check_interval: int = 120,  # 2 minutes
-    pending_task_threshold: int = 5,  # Number of pending tasks to trigger scaling
+    pending_task_threshold: int = 0,  # Number of pending tasks to trigger scaling
     max_workers: int = 10,  # Maximum number of workers
     scale_up_cooldown: int = 300,  # 5 minutes cooldown between scale-ups
 ) -> bool:
@@ -419,16 +434,17 @@ def start_ray_watcher(
             --network ray-cluster \\
             --init \\
             -v $(pwd):/workspace \\
-            -v /var/run/docker.sock:/var/run/docker.sock \\
+            -v $(pwd)/logs:/tmp/ray \\
             -w /workspace \\
             -e WATCHER_CHECK_INTERVAL={check_interval} \\
             -e WATCHER_PENDING_THRESHOLD={pending_task_threshold} \\
             -e WATCHER_MAX_WORKERS={max_workers} \\
             -e WATCHER_COOLDOWN={scale_up_cooldown} \\
-            -e RAY_IMAGE_VERSION={RAY_IMAGE_VERSION} \\
+            -e RAY_HEAD_ADDRESS=ray-head:10000 \\
             -e RAY_DISABLE_IMPORT_WARNING=1 \\
             {RAY_IMAGE_VERSION} \\
-            bash -c 'apt-get update && apt-get install -y docker.io && python /workspace/scripts/ray_watcher.py'
+            bash -c 'export PATH=$PATH:/workspace && python /workspace/scripts/ray_watcher.py'
+            
         """
         
         run_command(command.replace("\n", " ").replace("\\", ""))

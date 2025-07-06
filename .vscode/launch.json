@@ -79,7 +79,7 @@
             "console": "integratedTerminal",
             "args": [
                 "serve-deploy-start",
-                "--address", "0.0.0.0:10000"
+                "--address", "localhost:10000"
             ],
             "justMyCode": false,
             "env": {
@@ -95,7 +95,7 @@
             "console": "integratedTerminal",
             "args": [
                 "serve-deploy-shutdown",
-                "--address", "0.0.0.0:10000"
+                "--address", "localhost:10000"
             ],
             "justMyCode": false,
             "env": {
@@ -103,5 +103,19 @@
             },
             "consoleTitle": "Ray Serve Deploy SHUTDOWN"
         },
+        {
+            "name": "Ray Cluster Watcher: start",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/ray_watcher.py",
+            "console": "integratedTerminal",
+            "args": [],
+            "justMyCode": false,
+            "env": {
+                "RUNTIME_ENV": "development",
+                "RAY_HEAD_ADDRESS": "localhost:10001"
+            },
+            "consoleTitle": "Ray Watcher START"
+        }
     ]
 }
