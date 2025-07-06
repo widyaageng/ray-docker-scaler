@@ -1,11 +1,13 @@
 # Ray Cluster Project
 
-A scalable Ray-based microservices architecture for financial data processing, algorithmic trading, and market analysis running in Docker containers.
+TLDR on what this do
+https://www.youtube.com/watch?v=zbCSxyEH_eE
+
 
 ## Overview
 
 This project implements a distributed system using Ray Serve to deploy and manage multiple microservices in a containerized environment:
-
+Mocked Svcs:
 - **Algorunner**: Executes trading algorithms and strategies
 - **Screener**: Filters and screens financial data based on various criteria  
 - **Tickscrawler**: Crawls and collects market tick data from various sources
