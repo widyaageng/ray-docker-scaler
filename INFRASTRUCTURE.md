@@ -554,6 +554,45 @@ docker network inspect ray-cluster
 - **Ray Logs**: `./logs/` (mounted from containers)
 - **Container Logs**: `docker logs <container-name>`
 - **Infrastructure Logs**: `docker compose logs`
+- **Watcher Logs**: `docker logs ray-watcher`
+
+## Ray Autoscaling Watcher
+
+### Watcher Architecture
+The Ray watcher implements automatic cluster scaling using an advanced monitoring approach:
+
+- **Primary Monitoring**: Uses Ray Dashboard API for accurate pending task detection
+- **Fallback Monitoring**: Ray Python API with CPU utilization heuristics when API unavailable
+- **Scaling**: Calls `infra.py add-worker` for reliable container provisioning
+- **Container**: Runs in separate Docker container with workspace and Docker socket access
+- **Dependencies**: Requires `requests` library for HTTP API calls to Dashboard
+
+### Watcher Configuration
+```bash
+# Start with current defaults
+python scripts/infra.py start-watcher
+
+# Custom configuration
+python scripts/infra.py start-watcher \
+    --check-interval 10 \
+    --pending-threshold 0 \
+    --max-workers 5 \
+    --cooldown 60
+```
+
+### Default Settings
+- **Check Interval**: 10 seconds (responsive monitoring)
+- **Pending Threshold**: 0 tasks (triggers on any utilization)
+- **Max Workers**: 5 workers (conservative development limit)
+- **Cooldown**: 60 seconds (prevents rapid scaling)
+
+### Implementation Details
+- **File**: `scripts/ray_watcher.py`
+- **Primary Monitoring**: Ray Dashboard API (`http://localhost:8265/api/cluster_status`)
+- **Fallback Monitoring**: `ray.cluster_resources()`, `ray.available_resources()`
+- **Scaling**: `subprocess.run([python, infra.py, add-worker, --num-cpus, --num-gpus, --object-store-memory])`
+- **Container**: Includes Docker CLI, requests library, and socket access for worker management
+- **Configuration**: Environment variables for Dashboard API URL, worker specs, and scaling thresholds
 
 ## Development Notes
 

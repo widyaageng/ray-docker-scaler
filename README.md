@@ -100,6 +100,8 @@ raycluster/
 
 - Python 3.9+
 - Ray 2.47.1+
+- FastAPI (for services)
+- Requests (for watcher Dashboard API calls)
 - Docker and Docker Compose
 - 8GB+ RAM recommended
 
@@ -207,22 +209,30 @@ python scripts/infra.py watcher-status
 ```
 
 #### Ray Autoscaling Watcher
-The Ray watcher monitors cluster load and automatically provisions new workers when needed:
+The Ray watcher monitors cluster load and automatically provisions new workers when needed. It uses Ray's Python API for monitoring and calls `infra.py add-worker` to scale up:
 
 ```bash
 # Start watcher with custom settings
 python scripts/infra.py start-watcher \
-    --check-interval 120 \
-    --pending-threshold 5 \
-    --max-workers 10 \
-    --cooldown 300
+    --check-interval 10 \
+    --pending-threshold 0 \
+    --max-workers 5 \
+    --cooldown 60
 ```
 
 **Watcher Configuration:**
-- `--check-interval`: How often to check cluster status (default: 120 seconds)
-- `--pending-threshold`: Number of pending tasks to trigger scaling (default: 5)
-- `--max-workers`: Maximum number of workers to scale to (default: 10)
-- `--cooldown`: Time between scale-up events (default: 300 seconds)
+- `--check-interval`: How often to check cluster status (default: 10 seconds)
+- `--pending-threshold`: Number of pending tasks to trigger scaling (default: 0)
+- `--max-workers`: Maximum number of workers to scale to (default: 5)
+- `--cooldown`: Time between scale-up events (default: 60 seconds)
+
+**Implementation Details:**
+- Uses Ray Python API (`ray.cluster_resources()`, `ray.available_resources()`) for monitoring
+- Fetches accurate pending task metrics from Ray Dashboard API (`http://localhost:8265/api/cluster_status`)
+- Falls back to CPU utilization heuristics if Dashboard API is unavailable
+- Calls `infra.py add-worker` subprocess to provision new Docker containers
+- Runs in separate container with Docker socket access for worker provisioning
+- Configurable worker resources via environment variables (CPU, GPU, memory)
 
 #### Database & Cache Services
 ```bash

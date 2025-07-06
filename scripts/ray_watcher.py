@@ -12,6 +12,7 @@ import os
 import sys
 import subprocess
 from datetime import datetime, timedelta
+import requests
 from typing import Dict, Optional, List
 import ray
 from ray.util.state import list_nodes
@@ -33,6 +34,7 @@ PENDING_TASK_THRESHOLD = int(os.getenv('WATCHER_PENDING_THRESHOLD', '0'))
 MAX_WORKERS = int(os.getenv('WATCHER_MAX_WORKERS', '5'))
 SCALE_UP_COOLDOWN = int(os.getenv('WATCHER_COOLDOWN', '60'))
 RAY_HEAD_ADDRESS = os.getenv('RAY_HEAD_ADDRESS', 'localhost:10001')
+RAY_DASHBOARD_METRIC_API = os.getenv('RAY_DASHBOARD_METRIC_API', 'http://localhost:8265/api')
 
 
 def initialize_ray_connection():
@@ -57,8 +59,32 @@ def get_cluster_metrics() -> Optional[Dict[str, int]]:
     """
     Get Ray cluster metrics including pending tasks.
     
+    This function combines multiple data sources to estimate cluster load:
+    1. Ray API for cluster resources and node information
+    2. Ray Dashboard API for accurate pending task metrics
+    3. CPU-based heuristics as fallback for pending task estimation
+    
+    The pending task estimation logic works as follows:
+    - Primary: Attempts to fetch pending tasks from Ray Dashboard API resource demands
+    - Fallback: If API fails or returns 0 pending tasks, uses CPU-based estimation
+    - CPU estimation: If there are pending tasks > 0, finds the smallest available CPU 
+      spec from nodes and uses that as the estimated pending task count
+    
     Returns:
-        Dictionary with cluster metrics or None if failed
+        Dictionary with cluster metrics containing:
+        - pending_tasks: Estimated number of pending tasks waiting for resources
+        - running_tasks: Currently executing tasks (estimated from CPU usage)
+        - workers: Number of worker nodes (excludes head node)
+        - total_cpus: Total CPU cores available in cluster
+        - available_cpus: Currently available (unused) CPU cores
+        - used_cpus: Currently utilized CPU cores
+        
+        Returns None if failed to connect to Ray cluster or gather metrics.
+        
+    Note:
+        Pending task estimation is heuristic-based since Ray doesn't directly expose
+        this metric in a simple API. The function prioritizes Dashboard API data
+        but falls back to resource utilization patterns for estimation.
     """
     try:
         if not ray.is_initialized():
@@ -67,19 +93,21 @@ def get_cluster_metrics() -> Optional[Dict[str, int]]:
         
         # Get cluster status using Ray API
         cluster_status = ray.cluster_resources()
-        cluster_usage = ray.available_resources()
+        cluster_available = ray.available_resources()
         
         # Get node information - use a simpler approach
         nodes = ray.nodes()
         # Count total nodes and subtract 1 for head node
-        total_nodes = len([node for node in nodes if hasattr(node, 'state')])
+        total_nodes = len([node for node in nodes if 'Alive' in node.keys()])
         worker_nodes_count = max(0, total_nodes - 1)  # Assume 1 head node
+        nodes_cpu_sorted = [node['Resources'].get('CPU', 0) for node in nodes if 'Resources' in node]
+        nodes_cpu_sorted.sort()
         
         # Get task information from Ray's internal state
         # Note: Ray doesn't directly expose pending tasks count in a simple way
         # We'll use a heuristic based on resource usage
         total_cpus = cluster_status.get('CPU', 0)
-        available_cpus = cluster_usage.get('CPU', 0)
+        available_cpus = cluster_available.get('CPU', 0)
         used_cpus = total_cpus - available_cpus
         
         # Estimate pending tasks based on resource utilization
@@ -88,13 +116,38 @@ def get_cluster_metrics() -> Optional[Dict[str, int]]:
         estimated_running_tasks = int(used_cpus)
         
         # For pending tasks, we'll check if resources are fully utilized
-        # and make an educated guess based on typical workload patterns
+        # from metrics api
         estimated_pending_tasks = 0
-        if available_cpus < 1 and total_cpus > 0:  # Resources are heavily utilized
-            # This is a heuristic - in a real implementation, you'd want to
-            # monitor your specific workload patterns
-            estimated_pending_tasks = max(0, int(total_cpus * 0.5))  # Conservative estimate
-        
+        try:
+            _resp = requests.get(RAY_DASHBOARD_METRIC_API + '/cluster_status')
+            if _resp.status_code == 200:
+                logger.info(f"Succeed get cluster status from API: {_resp}")
+
+                # TODO: this parsing is highly opinionated and may change in future
+                # versions of Ray Dashboard API
+                # Adjust the parsing based on actual API response structure
+                _resource_demands = _resp.json().get('data', {})\
+                            .get('clusterStatus', {})\
+                            .get('loadMetricsReport', {})\
+                            .get('resourceDemand', [])
+                if len(_resource_demands) > 0:
+                    for demand_elem in _resource_demands:
+                        # Each demand_elem is a list of demands, sum them up
+                        if len(demand_elem) > 1:
+                            estimated_pending_tasks += demand_elem[0].get('CPU')*demand_elem[1]
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch cluster status from API: {e}")
+            pass
+
+        # If we detected pending tasks from Dashboard API, refine the estimate
+        # by using the smallest available CPU spec from nodes as a more realistic
+        # pending task count (assumes each task needs at least one CPU unit)
+        if estimated_pending_tasks > 0:
+            for cpu_spec in nodes_cpu_sorted:
+                if cpu_spec > 0:
+                    estimated_pending_tasks = cpu_spec
+                    break
+
         metrics = {
             "pending_tasks": estimated_pending_tasks,
             "running_tasks": estimated_running_tasks,

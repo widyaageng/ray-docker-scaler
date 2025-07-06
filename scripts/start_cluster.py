@@ -347,7 +347,7 @@ def main():
             # Deploy services if requested
             if args.with_services:
                 logger.info("Deploying Ray Serve services...")
-                time.sleep(10)  # Wait for cluster to stabilize
+                time.sleep(30)  # Wait for cluster to stabilize
                 if not action_serve_app(
                     action="deploy",
                     address=args.address,

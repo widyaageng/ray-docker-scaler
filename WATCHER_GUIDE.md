@@ -144,70 +144,81 @@ The watcher can be extended with custom scaling logic by modifying the `scale_up
 
 ### Watcher Architecture
 
-The Ray watcher implementation follows a clean, modular architecture using Ray's Python API:
+The Ray watcher implementation follows a hybrid architecture combining Ray's Python API with Docker container management:
 
 **File: `scripts/ray_watcher.py`**
 - Standalone Python script for the Ray watcher service
-- Uses Ray's Python API for cluster monitoring and metrics collection
-- Configured to read settings from environment variables
-- Handles Ray cluster monitoring and scaling decisions
-- Includes proper error handling and logging
+- Uses Ray's Python API (`ray.cluster_resources()`, `ray.available_resources()`) for cluster monitoring
+- Fetches accurate pending task metrics from Ray Dashboard API endpoints
+- Falls back to CPU utilization heuristics if Dashboard API is unavailable
+- Calls `infra.py add-worker` subprocess to provision new Docker worker containers
+- Configured to read settings from environment variables including worker resource specs
+- Includes proper error handling and logging with HTTP request timeout handling
 
 **File: `scripts/infra.py`**
 - Modified `start_ray_watcher()` function to use the separate watcher script
 - Updated container mount to use `/workspace/scripts/ray_watcher.py` directly
-- Removed Docker socket mount (no longer needed)
+- Restored Docker socket mount for worker container provisioning
 - Passes Ray head address and configuration via environment variables
 
 ### Key Improvements
 
 **Cleaner Architecture:**
 - Watcher logic is now in a separate, maintainable file
-- Uses Ray's Python API for cluster monitoring instead of Docker commands
+- Uses Ray's Python API + Ray Dashboard API for accurate cluster monitoring
+- Falls back to CPU-based heuristics when Dashboard API is unavailable
 - Environment variables are used for configuration
-- No dependency on Docker CLI within the watcher container
+- Hybrid approach: Ray API for monitoring + subprocess calls for scaling
 
 **Better Container Setup:**
 - Uses workspace mount (`/workspace`) for script access
-- Connects to Ray cluster via network communication
-- Simplified container configuration without Docker socket mounting
-- Proper environment variable passing for Ray connection
+- Connects to Ray cluster via Ray client API for monitoring
+- Accesses Ray Dashboard API for accurate pending task metrics
+- Docker socket mounted for worker container provisioning
+- Proper environment variable passing for Ray connection and worker specs
 
 **Configuration:**
-- `WATCHER_CHECK_INTERVAL`: Check frequency (default: 120 seconds)
-- `WATCHER_PENDING_THRESHOLD`: Tasks threshold (default: 5)
-- `WATCHER_MAX_WORKERS`: Maximum workers (default: 10)
-- `WATCHER_COOLDOWN`: Scale-up cooldown (default: 300 seconds)
-- `RAY_HEAD_ADDRESS`: Ray head node address (default: ray-head:10000)
+- `WATCHER_CHECK_INTERVAL`: Check frequency (default: 10 seconds)
+- `WATCHER_PENDING_THRESHOLD`: Tasks threshold (default: 0)
+- `WATCHER_MAX_WORKERS`: Maximum workers (default: 5)
+- `WATCHER_COOLDOWN`: Scale-up cooldown (default: 60 seconds)
+- `RAY_HEAD_ADDRESS`: Ray head node address (default: localhost:10001)
+- `RAY_DASHBOARD_METRIC_API`: Dashboard API base URL (default: http://localhost:8265/api)
+- `WATCHER_NUM_CPUS`: CPUs per new worker (default: 1)
+- `WATCHER_NUM_GPUS`: GPUs per new worker (default: 0)
+- `WATCHER_OBJECT_STORE_MEMORY`: Object store memory per worker (default: 1GB)
 
 ### Container Command
 
-The watcher now runs with this simplified command:
+The watcher now runs with this command:
 ```bash
 docker run -d \
     --name ray-watcher \
     --network ray-cluster \
     --init \
     -v $(pwd):/workspace \
+    -v $(pwd)/logs:/tmp/ray \
+    -v /var/run/docker.sock:/var/run/docker.sock \
     -w /workspace \
-    -e WATCHER_CHECK_INTERVAL=120 \
-    -e WATCHER_PENDING_THRESHOLD=5 \
-    -e WATCHER_MAX_WORKERS=10 \
-    -e WATCHER_COOLDOWN=300 \
-    -e RAY_HEAD_ADDRESS=ray-head:10000 \
+    -e WATCHER_CHECK_INTERVAL=10 \
+    -e WATCHER_PENDING_THRESHOLD=0 \
+    -e WATCHER_MAX_WORKERS=5 \
+    -e WATCHER_COOLDOWN=60 \
+    -e RAY_HEAD_ADDRESS=localhost:10001 \
     -e RAY_DISABLE_IMPORT_WARNING=1 \
     rayproject/ray:2.47.1.aeaf41-py39-cpu \
-    bash -c 'python /workspace/scripts/ray_watcher.py'
+    bash -c 'apt-get update && apt-get install -y docker.io && python /workspace/scripts/ray_watcher.py'
 ```
 
 ### Benefits
 
 1. **Maintainability**: Watcher logic is in a separate file for easier editing
-2. **API-based**: Uses Ray's Python API for clean cluster integration
-3. **Configuration**: Clean environment variable-based configuration
-4. **Deployment**: Simplified container setup using workspace mount
-5. **Version Control**: Better diff tracking with separate files
-6. **Security**: No need for Docker socket access within container
+2. **Accurate Monitoring**: Uses Ray Dashboard API for precise pending task detection
+3. **Fallback Resilience**: CPU-based heuristics when Dashboard API is unavailable
+4. **Configuration**: Clean environment variable-based configuration
+5. **Deployment**: Simplified container setup using workspace mount
+6. **Scalability**: Actual worker provisioning via proven Docker container management
+7. **Resource Control**: Configurable CPU, GPU, and memory specifications for new workers
 
 ## Testing
 
