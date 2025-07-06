@@ -18,28 +18,88 @@ Mocked Svcs:
 raycluster/
 │
 ├── serve_app/                    # Main Ray Serve application
+│   ├── __init__.py
 │   ├── serve_app.py              # Entry point for service deployment
 │   ├── router_deployment.py     # Central FastAPI router as Ray Serve deployment
+│   ├── router.py                 # Router logic
 │   └── config.py                 # Configuration for services
 │
 ├── services/                     # Microservices implementations
 │   ├── algorunner/               # Trading algorithm execution service
+│   │   ├── __init__.py
 │   │   ├── deployment.py         # Ray Serve deployment
 │   │   ├── logic.py              # Business logic
 │   │   └── config.py             # Service configuration
 │   ├── screener/                 # Financial data screening service
+│   │   ├── __init__.py
+│   │   ├── deployment.py
+│   │   ├── logic.py
+│   │   └── config.py
 │   ├── tickscrawler/             # Market data crawling service
+│   │   ├── __init__.py
+│   │   ├── deployment.py
+│   │   ├── logic.py
+│   │   └── config.py
 │   └── shared/                   # Shared utilities and models
+│       ├── __init__.py
+│       ├── models.py
+│       └── utils.py
 │
 ├── scripts/                      # Cluster management scripts
 │   ├── start_cluster.py          # Main cluster lifecycle management
 │   ├── cluster_manager.py        # Comprehensive system management
+│   ├── deploy.py                 # Service deployment script
 │   ├── infra.py                  # Docker infrastructure management
-│   └── autoscaler.py             # Custom autoscaler
+│   └── ray_watcher.py            # Ray cluster autoscaling watcher
+│
+├── tests/                        # Test suite
+│   ├── test_algorunner.py
+│   ├── test_deployments.py
+│   ├── test_integration.py
+│   ├── test_rate.py
+│   ├── test_ray_watcher_api.py
+│   ├── test_ray.py
+│   ├── test_screener.py
+│   ├── test_watcher_logic.py
+│   ├── test_watcher_suite.py
+│   └── test_watcher.py
 │
 ├── postgres/                     # PostgreSQL configuration
+│   ├── config/
+│   │   └── postgresql.conf
+│   ├── data/                     # Database data directory
+│   ├── init/                     # Database initialization scripts
+│   │   └── 01-init-database.sh
+│   ├── pgadmin/                  # pgAdmin data directory
+│   └── pgadmin-servers.json      # pgAdmin server configuration
+│
 ├── redis/                        # Redis configuration
-└── tests/                        # Test suite
+│   ├── config/
+│   │   └── redis.conf
+│   └── data/                     # Redis data directory
+│       └── appendonlydir/
+│
+├── logs/                         # Ray cluster logs and session data
+│   ├── session_latest            # Symlink to latest session
+│   ├── clean_log.sh              # Log cleanup script
+│   ├── prom_metrics_service_discovery.json
+│   ├── ray_current_cluster
+│   └── session_*/                # Session-specific logs and data
+│       ├── node_ip_address.json
+│       ├── ports_by_node.json
+│       ├── logs/
+│       ├── metrics/
+│       ├── runtime_resources/
+│       └── sockets/
+│
+├── cluster.yaml                  # Ray cluster configuration
+├── env.example.txt               # Environment variables template
+├── infra-docker-compose.yaml     # Docker Compose for infrastructure
+├── requirements.txt              # Python dependencies
+├── README.md                     # This file
+├── WATCHER_GUIDE.md             # Watcher implementation guide
+├── WATCHER_IMPLEMENTATION.md    # Detailed watcher implementation
+└── INFRASTRUCTURE.md            # Infrastructure setup documentation
 ```
 
 ## Features
